@@ -1,5 +1,6 @@
 #include <glad/glad.h> // glad должен включатьс€ первым
 #include <GLFW/glfw3.h>
+#include <stb/stb_image.h>
 #include <iostream>
 #include <fstream>
 #include <string>
@@ -64,12 +65,12 @@ namespace utils
         {
             const auto shader_code_opt{ getFileContents(filename) };
             if (!shader_code_opt) [[unlikely]]
-                throw std::runtime_error{ "Can not open filename: " + filename + "\n" };
+                throw std::runtime_error{ "Can not open filename: " + filename };
 
             const char* shader_code_source{ shader_code_opt.value().c_str() };
             m_id = glCreateShader(gl_shader_type);
             if(m_id == 0) [[unlikely]]
-                throw std::runtime_error{ "Can not greate Shader from file: " + filename + "\n" };
+                throw std::runtime_error{ "Can not greate Shader from file: " + filename };
 
             glShaderSource(m_id, 1, &shader_code_source, NULL);
             glCompileShader(m_id);
@@ -123,7 +124,7 @@ namespace utils
             m_id{ glCreateProgram() }
         {
             if (m_id == 0) [[unlikely]]
-                throw std::runtime_error{ "Can not greate Shader program!\n" };
+                throw std::runtime_error{ "Can not greate Shader program!" };
 
             for (const auto& shader : shaders)
             {
@@ -197,6 +198,41 @@ namespace utils
         GLuint m_id;
     };
 
+    namespace guard_types {
+        struct gl_uint_t {
+            using type = GLuint;
+            static inline const std::function<void(type&)> fctor{ [](type& id) { glGenBuffers(1, &id); } };
+            static inline const std::function<void(type&)> fdtor{ [](type& id) { glDeleteBuffers(1, &id); } };
+        };
+        struct gl_texture_t {
+            using type = GLuint;
+            static inline const std::function<void(type&)> fctor{ [](type& id) { glGenTextures(1, &id); } };
+            static inline const std::function<void(type&)> fdtor{ [](type& id) { glDeleteTextures(1, &id); } };
+        };
+    }
+    template<typename GuardTypes>
+    requires requires {
+        typename GuardTypes::type;
+        GuardTypes::fctor;
+        GuardTypes::fdtor;
+    }
+    class GuardID final
+    {
+    public:
+        GuardID() :
+            m_id{}
+        {
+            std::invoke(GuardTypes::fctor, m_id);
+        }
+        ~GuardID()
+        {
+            std::invoke(GuardTypes::fdtor, m_id);
+        }
+        [[nodiscard]] GLuint getID() const { return m_id; }
+    private:
+        GLuint m_id;
+    };
+
     template <typename TArrayBuffer>
     requires requires {
         typename TArrayBuffer::array_t;
@@ -227,7 +263,7 @@ namespace utils
             unbind();
         }
     private:
-        GLuintGuard m_id;
+        GuardID<guard_types::gl_uint_t> m_id;
     };
 
     class VertexArrayObject
@@ -269,6 +305,77 @@ namespace utils
     private:
         GLuint m_id;
     };
+
+    class Texture final {
+    public:
+        [[nodiscard]] static Texture getTexture(const std::string& filename, GLenum type, GLenum slot, GLenum format, GLenum pixel_type)
+        {
+            return Texture{ filename, type, slot, format, pixel_type };
+        }
+
+        explicit Texture(const std::string& filename, GLenum type, GLenum slot, GLenum format, GLenum pixel_type) :
+            m_id{},
+            m_type{ type }
+        {
+            stbi_set_flip_vertically_on_load(true);
+
+            int width{};
+            int height{};
+            int col_h{};
+
+            std::unique_ptr < uint8_t, decltype([](uint8_t* raw_image_bytes) { stbi_image_free(raw_image_bytes); }) > raw_image_bytes_uptr {
+                stbi_load(filename.c_str(), &width, &height, &col_h, 0)
+            };
+
+            const auto* bytes{ raw_image_bytes_uptr.get() };
+            if(! bytes) [[unlikely]]
+                throw std::runtime_error{ "Can not open texture: '" + filename };
+
+            glActiveTexture(slot);
+            Guard g{ [this] { glBindTexture(m_type, m_id.getID()); }, [this] { glBindTexture(m_type, 0); } };
+            
+            // Ќастраиваем тип алгоритма, который используетс€ дл€ уменьшени€ или увеличени€ изображени€
+            glTexParameteri(m_type, GL_TEXTURE_MIN_FILTER, GL_NEAREST_MIPMAP_LINEAR);
+            glTexParameteri(m_type, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+            // Ќастраиваем способ повторени€ текстуры (если это вообще происходит)
+            glTexParameteri(m_type, GL_TEXTURE_WRAP_S, GL_REPEAT);
+            glTexParameteri(m_type, GL_TEXTURE_WRAP_T, GL_REPEAT);
+            // ѕрисваиваем изображение объекту текстуры OpenGL
+            glTexImage2D(m_type, 0, GL_RGBA, width, height, 0, format, pixel_type, bytes);
+            // √енерируем MipMaps
+            glGenerateMipmap(m_type);
+        }
+
+        void bind() const
+        {
+            glBindTexture(m_type, m_id.getID());
+        }
+
+        void unbind() const
+        {
+            glBindTexture(m_type, 0);
+        }
+
+        Texture& setupUnit(ShaderProgram& shader_program, const std::string& uniform, GLuint unit ) &
+        {
+            GLint tex_uni{ glGetUniformLocation(shader_program.getProgramID(), uniform.c_str()) };
+            shader_program.activate();
+            glUniform1i(tex_uni, unit);
+            return *this;
+        }
+
+        const Texture& setupUnit(ShaderProgram& shader_program, const std::string& uniform, GLuint unit ) const &
+        {
+            GLint tex_uni{ glGetUniformLocation(shader_program.getProgramID(), uniform.c_str()) };
+            shader_program.activate();
+            glUniform1i(tex_uni, unit);
+            return *this;
+        }
+
+    private:
+        GuardID<guard_types::gl_texture_t> m_id;
+        GLenum m_type;
+    };
 } // namespace utils
 
 void handler();
@@ -285,6 +392,30 @@ int main()
         std::cerr << "ex: " << ex.what() << "\n";
         return 2;
     }
+}
+
+void transform(const std::span<GLfloat> sp)
+{
+    // переменна€ дл€ направлени€ анимации
+    static bool isStretch = true;
+    //// шаг трансформации
+    GLfloat step = 0.005;
+    if (isStretch) {
+        sp[2 * 8] += step;
+        sp[3 * 8] -= step;
+        if (sp[2 * 8] >= 0.7f)
+            isStretch = false;
+    }
+    else {
+        sp[2 * 8] -= step;
+        sp[3 * 8] += step;
+        if (sp[2 * 8] <= 0.5f)
+            isStretch = true;
+    }
+
+    //// обновление данных в буфере
+    glBufferSubData(GL_ARRAY_BUFFER, sizeof(GLfloat) * 2 * 8, sizeof(GLfloat), &sp[2 * 8]);
+    glBufferSubData(GL_ARRAY_BUFFER, sizeof(GLfloat) * 3 * 8, sizeof(GLfloat), &sp[3 * 8]);
 }
 
 void handler()
@@ -326,12 +457,20 @@ void handler()
     utils::ShaderProgram prog{ std::move(shaders) };
     std::cout << "before shader program\n";
 
-    const std::array<GLfloat, 24> vertices{
-        // COORDINATE / COLORS //
-        -0.5f, 0.5f, 0.0f, 0.0f, 128 / 255.0f, 255 / 255.0f,
-        0.5f, 0.5f, 0.0f, 255 / 255.0f, 0 / 255.0f, 0 / 255.0f,
-        0.5f, -0.5f, 0.0f, 0 / 255.0f, 153 / 255.0f, 0 / 255.0f,
-        -0.5f, -0.5f, 0.0f, 255 / 255.0f, 255 / 255.0f, 51 / 255.0f
+    const auto tex{ utils::Texture::getTexture(
+        "textures/Gravel_001_BaseColor.jpg", 
+        GL_TEXTURE_2D,
+        GL_TEXTURE0,
+        GL_RGB,
+        GL_UNSIGNED_BYTE )
+    };
+
+    std::array<GLfloat, 32> vertices{
+        // COORDINATE / COLORS / TEXTURE COORDINATE
+        -0.5f, 0.5f, 0.0f, 0.0f, 128 / 255.0f, 255 / 255.0f, 0.0f, 0.0f,
+        0.5f, 0.5f, 0.0f, 255 / 255.0f, 0 / 255.0f, 0 / 255.0f, 0.0f, 1.0f,
+        0.5f, -0.5f, 0.0f, 0 / 255.0f, 153 / 255.0f, 0 / 255.0f, 1.0f, 1.0f,
+        -0.5f, -0.5f, 0.0f, 255 / 255.0f, 255 / 255.0f, 51 / 255.0f, 1.0f, 0.0f,
     };
     const std::array<GLuint, 4> indexes{ 0, 1, 2, 3 };
 
@@ -340,16 +479,38 @@ void handler()
     const utils::BufferObjects<utils::gl_types::gl_array_buffer_t> vbo { vertices };
     const utils::BufferObjects<utils::gl_types::gl_element_array_buffer_t> ebo { indexes };
 
-    vao.linkAttrib(vbo, 0, 3, GL_FLOAT, 6 * sizeof(float), (void*)0);
-    vao.linkAttrib(vbo, 1, 3, GL_FLOAT, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    vao.linkAttrib(vbo, 0, 3, GL_FLOAT, 8 * sizeof(float), (void*)0);
+    vao.linkAttrib(vbo, 1, 3, GL_FLOAT, 8 * sizeof(float), (void*)(3 * sizeof(float)));
+    vao.linkAttrib(vbo, 2, 2, GL_FLOAT, 8 * sizeof(float), (void*)(6 * sizeof(float)));
     
     vao.unbind();
 
+    double prev_time{ glfwGetTime() };
+
     while (!glfwWindowShouldClose(window))
     {
-        prog.activate();
         glClearColor(0.07f, 0.13f, 0.17f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
+
+        prog.activate();
+
+        // анимаци€ c шагом в 0.01 секунды
+        double currTime = glfwGetTime();
+        if (currTime - prev_time >= 0.01)
+        {
+            // скажем OpenGL использовать VBO
+            vbo.bind();
+            // ѕроизедем шаг трансформации
+            transform(vertices);
+            
+            // обновим данные в VBO
+            vao.linkAttrib(vbo, 0, 3, GL_FLOAT, 8 * sizeof(float), (void*)0);
+            // обновим врем€
+            prev_time = currTime;
+        }
+
+        tex.setupUnit(prog, "tex0", 0);
+        tex.bind();
 
         vao.bind();
 

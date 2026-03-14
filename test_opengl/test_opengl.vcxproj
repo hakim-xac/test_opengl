@@ -102,7 +102,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\PROJECTS\CPP\libs\OpenGL\GLFW\include;D:\PROJECTS\CPP\libs\OpenGL\glad\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\PROJECTS\CPP\libs\OpenGL\stb\include;D:\PROJECTS\CPP\libs\OpenGL\GLFW\include;D:\PROJECTS\CPP\libs\OpenGL\glad\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard>stdcpp20</LanguageStandard>
     </ClCompile>
     <Link>
@@ -121,7 +121,7 @@
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp20</LanguageStandard>
-      <AdditionalIncludeDirectories>D:\PROJECTS\CPP\libs\OpenGL\GLFW\include;D:\PROJECTS\CPP\libs\OpenGL\glad\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\PROJECTS\CPP\libs\OpenGL\stb\include;D:\PROJECTS\CPP\libs\OpenGL\GLFW\include;D:\PROJECTS\CPP\libs\OpenGL\glad\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -133,10 +133,14 @@
   <ItemGroup>
     <ClCompile Include="..\..\libs\OpenGL\glad\src\glad.c" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="stb_image.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="shaders\default.frag" />
     <None Include="shaders\default.vert" />
+  </ItemGroup>
+  <ItemGroup>
+    <Image Include="textures\Gravel_001_BaseColor.jpg" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />
