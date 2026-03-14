@@ -205,7 +205,6 @@ namespace utils
     class BufferObjects final
     {
     public:
-
         explicit BufferObjects(const std::span<const typename TArrayBuffer::array_t> buffer) :
             m_id{}
         {
@@ -251,18 +250,19 @@ namespace utils
             t.bind();
             t.unbind();
         }
-        void linkAttrib(const TBO& bo, GLuint layout, GLuint num_components, GLenum type, GLsizeiptr stride, void* offset)
+        const VertexArrayObject& linkAttrib(const TBO& bo, GLuint layout, GLuint num_components, GLenum type, GLsizeiptr stride, void* offset) const&
         {
             Guard g{ [&bo = bo] { bo.bind();  }, [&bo = bo] { bo.unbind(); } };
             glVertexAttribPointer(layout, num_components, type, GL_FALSE, static_cast<GLsizei>(stride), offset);
             glEnableVertexAttribArray(layout);
+            return *this;
         }
 
-        void bind()
+        void bind() const
         {
             glBindVertexArray(m_id);
         }
-        void unbind()
+        void unbind() const
         {
             glBindVertexArray(0);
         }
@@ -323,10 +323,8 @@ void handler()
     shaders.emplace_back("shaders/default.vert", GL_VERTEX_SHADER);
     shaders.emplace_back("shaders/default.frag", GL_FRAGMENT_SHADER);
 
-    utils::ShaderProgram prog{ std::move(shaders)};
+    utils::ShaderProgram prog{ std::move(shaders) };
     std::cout << "before shader program\n";
-
-    utils::VertexArrayObject vao{};
 
     const std::array<GLfloat, 24> vertices{
         // COORDINATE / COLORS //
@@ -336,6 +334,8 @@ void handler()
         -0.5f, -0.5f, 0.0f, 255 / 255.0f, 255 / 255.0f, 51 / 255.0f
     };
     const std::array<GLuint, 4> indexes{ 0, 1, 2, 3 };
+
+    const utils::VertexArrayObject vao{};
 
     const utils::BufferObjects<utils::gl_types::gl_array_buffer_t> vbo { vertices };
     const utils::BufferObjects<utils::gl_types::gl_element_array_buffer_t> ebo { indexes };
