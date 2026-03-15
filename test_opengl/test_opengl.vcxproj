@@ -133,6 +133,10 @@
   <ItemGroup>
     <ClCompile Include="..\..\libs\OpenGL\glad\src\glad.c" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="source\Shader.cpp" />
+    <ClCompile Include="source\ShaderProgram.cpp" />
+    <ClCompile Include="source\Texture.cpp" />
+    <ClCompile Include="source\VertexArrayObject.cpp" />
     <ClCompile Include="stb_image.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -141,6 +145,15 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="textures\Gravel_001_BaseColor.jpg" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="include\BufferObjects.h" />
+    <ClInclude Include="include\GLTypes.h" />
+    <ClInclude Include="include\Shader.h" />
+    <ClInclude Include="include\ShaderProgram.h" />
+    <ClInclude Include="include\Texture.h" />
+    <ClInclude Include="include\Utils.h" />
+    <ClInclude Include="include\VertexArrayObject.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets" />
